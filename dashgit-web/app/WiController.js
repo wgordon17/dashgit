@@ -1,4 +1,5 @@
 import { gitHubApi } from "./GitHubApi.js"
+import { gitHubAdapter } from "./GitHubAdapter.js"
 import { gitLabApi } from "./GitLabApi.js"
 import { wiView } from "./WiView.js"
 import { Model } from "./Model.js"
@@ -56,9 +57,14 @@ const wiController = {
   // Creates the appropriate target promise for each provider and run all promises in parallel
   dispatch: function (target, sorting) {
     // Particular case for branches view, only asynchronous call to update the status cache
-    if (target == "statuses") { 
+    if (target == "statuses") {
       this.branchViewSortOrder = sorting;
       this.dispatchStatuses(target);
+      return;
+    }
+    // Particular case for forks view
+    if (target == "forks") {
+      this.dispatchForks();
       return;
     }
     // General case for the rest of targets, create the promises to get the work items and then update the notifications and statuses asynchronously
@@ -251,6 +257,66 @@ const wiController = {
     return mentionCount;
   },
 
+  // Forks view
+
+  dispatchForks: async function () {
+    $(`#forks`).html("");
+    const promises = [];
+    for (let provider of config.data.providers)
+      if (provider.enabled && provider.provider === "GitHub")
+        promises.push(this.displayForks(provider));
+    await Promise.allSettled(promises);
+    wiView.setLoading(false);
+  },
+
+  displayForks: async function (provider) {
+    try {
+      // Use cache if available
+      if (cache.forksCache[provider.uid]) {
+        wiView.renderForks(provider.uid, cache.forksCache[provider.uid]);
+        return;
+      }
+      const forksData = await gitHubApi.getForksData(provider);
+      const model = gitHubAdapter.forks2model(provider, forksData);
+      cache.forksCache[provider.uid] = model;
+      wiView.renderForks(provider.uid, model);
+    } catch (error) {
+      console.error("Failed to get forks data:", error);
+      const safeErr = $("<span>").text(error.message || String(error)).html();
+      this.displayError("Failed to get forks data. Message: " + safeErr);
+      const emptyModel = this.emptyModel(provider, "Error loading forks data");
+      wiView.renderForks(provider.uid, emptyModel);
+    }
+  },
+
+  handleSyncDispatch: async function (provider, forkFullName, workflowFile, ref) {
+    try {
+      await gitHubApi.triggerSyncWorkflow(provider, forkFullName, workflowFile, ref);
+      const safeName = $("<span>").text(forkFullName).html();
+      wiView.renderAlert("success", `Sync workflow triggered for ${safeName}. Check the Actions tab for progress.`);
+      // Invalidate cache so next visit refreshes
+      delete cache.forksCache[provider.uid];
+    } catch (error) {
+      console.error("Failed to trigger sync workflow:", error);
+      const safeName = $("<span>").text(forkFullName).html();
+      const safeMsg = $("<span>").text(error.message || String(error)).html();
+      wiView.renderAlert("danger", `Failed to trigger sync workflow for ${safeName}. Message: ${safeMsg}`);
+    }
+  },
+
 }
+
+// Click handler for fork sync buttons
+$(document).on('click', '.wi-fork-sync-btn', function (e) {
+  const forkFullName = $(this).attr('data-fork');
+  const workflowFile = $(this).attr('data-workflow');
+  const ref = $(this).attr('data-ref') || 'main';
+  // Find the provider from the accordion panel
+  const providerButton = $(this).closest('.accordion-item').find('[wi-providers-panelbutton-provider]');
+  const providerId = providerButton.attr('wi-providers-panelbutton-provider');
+  const provider = config.getProviderByUid(providerId);
+  if (provider)
+    wiController.handleSyncDispatch(provider, forkFullName, workflowFile, ref);
+});
 
 export { wiController };

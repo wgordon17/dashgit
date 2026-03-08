@@ -182,6 +182,64 @@ const wiRender = {
     return 0.2126 * r + 0.7152 * g + 0.0722 * b; // per ITU-R BT.709
   },
 
+  escHtml: function (str) {
+    return $("<span>").text(str).html();
+  },
+
+  forkRow2html: function (item) {
+    const esc = this.escHtml;
+    const actions = item.actions ?? {};
+    const repoName = esc(item.repo_name);
+    const upstreamName = esc(item.title);
+    const forkUrl = esc(item.url);
+    const upstreamUrl = esc(item.repo_url);
+    const workflowFile = esc(actions.workflow_file);
+    const behindBadge = actions.behind_by > 0
+      ? `<span class="badge bg-warning text-dark">${parseInt(actions.behind_by)} behind</span>`
+      : `<span class="badge bg-success">up to date</span>`;
+    const aheadBadge = actions.ahead_by > 0
+      ? ` <span class="badge bg-info text-dark">${parseInt(actions.ahead_by)} ahead</span>`
+      : '';
+    const statusBadge = this.forkStatusBadge(actions.sync_status);
+    const prLink = actions.sync_pr_number
+      ? ` <a href="${esc(actions.sync_pr_url)}" target="_blank" class="badge bg-primary text-decoration-none">PR #${parseInt(actions.sync_pr_number)}</a>`
+      : '';
+    const defaultBranch = esc(actions.default_branch || 'main');
+    const syncButton = actions.behind_by > 0 && actions.sync_status !== 'pr-open'
+      ? ` <button class="btn btn-warning btn-sm wi-fork-sync-btn" data-fork="${repoName}" data-workflow="${workflowFile}" data-ref="${defaultBranch}">
+          <i class="fa-solid fa-arrows-rotate"></i> Sync</button>`
+      : '';
+
+    return `
+    <tr class="wi-status-class-any" itemrepo="${repoName}">
+      <td style="width:24px;"><i class="fa-solid fa-code-fork" style="color:DodgerBlue"></i></td>
+      <td>
+        <span class="fw-bold"><a href="${forkUrl}" target="_blank" class="link-dark link-underline-opacity-0 link-underline-opacity-100-hover">${repoName}</a></span>
+        <span class="text-secondary"> &larr; </span>
+        <span><a href="${upstreamUrl}" target="_blank" class="link-secondary link-underline-opacity-0 link-underline-opacity-100-hover">${upstreamName}</a></span>
+      </td>
+      <td>${behindBadge}${aheadBadge}</td>
+      <td>${statusBadge}${prLink}</td>
+      <td>${syncButton}</td>
+    </tr>
+    `;
+  },
+
+  forkStatusBadge: function (syncStatus) {
+    if (syncStatus === 'up-to-date')
+      return `<span class="badge bg-success">synced</span>`;
+    else if (syncStatus === 'behind')
+      return `<span class="badge bg-warning text-dark">behind</span>`;
+    else if (syncStatus === 'ahead')
+      return `<span class="badge bg-info text-dark">ahead</span>`;
+    else if (syncStatus === 'diverged')
+      return `<span class="badge" style="background-color:orange;color:#000">diverged</span>`;
+    else if (syncStatus === 'pr-open')
+      return `<span class="badge bg-primary">PR open</span>`;
+    else
+      return `<span class="badge bg-secondary">unknown</span>`;
+  },
+
 }
 
 export { wiRender };

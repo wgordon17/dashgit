@@ -336,6 +336,134 @@ const gitHubApi = {
     return query
   },
 
+  // Fork tracking API methods
+
+  getForksGraphQlQuery: function (syncBranch, pageSize, cursor) {
+    return `{
+      viewer {
+        organizations(first: 100) {
+          nodes { login }
+        }
+        repositories(isFork: true, first: ${pageSize}, orderBy: {field: PUSHED_AT, direction: DESC},
+            after: ${cursor == null ? "null" : `"${cursor}"`}) {
+          nodes {
+            nameWithOwner, url
+            defaultBranchRef { name }
+            parent {
+              nameWithOwner, url
+              owner { login }
+              defaultBranchRef { name }
+            }
+            pullRequests(headRefName: "${syncBranch}", states: OPEN, first: 1) {
+              nodes { number, url }
+            }
+          }
+          pageInfo { hasNextPage, endCursor }
+        }
+      }
+    }`;
+  },
+
+  getForksGraphQlData: async function (provider, syncBranch) {
+    const gql = this.getGraphQlApi(provider);
+    let allNodes = [];
+    let orgs = [];
+    let hasNextPage = true;
+    let endCursor = null;
+    let page = 0;
+    while (hasNextPage) {
+      const query = this.getForksGraphQlQuery(syncBranch, 50, endCursor);
+      this.log(provider.uid, `Get forks GraphQL, page ${++page} ...`);
+      const response = await gql(query);
+      if (page === 1)
+        orgs = response.viewer.organizations.nodes.map(o => o.login.toLowerCase());
+      allNodes.push(...response.viewer.repositories.nodes);
+      hasNextPage = response.viewer.repositories.pageInfo.hasNextPage;
+      endCursor = response.viewer.repositories.pageInfo.endCursor;
+    }
+    return { orgs, forks: allNodes };
+  },
+
+  getForkCompareStatus: async function (octokit, forkFullName, upstreamFullName, branch) {
+    const upstreamOwner = upstreamFullName.split('/')[0];
+    const forkOwner = forkFullName.split('/')[0];
+    const repo = forkFullName.split('/')[1];
+    try {
+      const response = await octokit.request('GET /repos/{owner}/{repo}/compare/{basehead}', {
+        owner: forkOwner, repo: repo,
+        basehead: `${upstreamOwner}:${branch}...${forkOwner}:${branch}`
+      });
+      return { status: response.data.status, behind_by: response.data.behind_by, ahead_by: response.data.ahead_by };
+    } catch (error) {
+      if (error.status === 404)
+        return { status: 'unknown', behind_by: 0, ahead_by: 0 };
+      throw error;
+    }
+  },
+
+  triggerSyncWorkflow: async function (provider, forkFullName, workflowFile, ref) {
+    const token = config.decrypt(provider.token);
+    const octokit = new Octokit({ userAgent: this.userAgent, auth: token });
+    const owner = forkFullName.split('/')[0];
+    const repo = forkFullName.split('/')[1];
+    await octokit.request('POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches', {
+      owner: owner, repo: repo, workflow_id: workflowFile, ref: ref || 'main'
+    });
+  },
+
+  getForksData: async function (provider) {
+    const token = config.decrypt(provider.token);
+    const octokit = new Octokit({ userAgent: this.userAgent, auth: token });
+    const t0 = Date.now();
+
+    const syncBranch = provider.forks?.syncBranch ?? "upstream-sync";
+    const workflowFile = provider.forks?.syncWorkflowFile ?? "upstream-sync.yml";
+
+    // Single GraphQL call: orgs + forks (with parent info) + sync PRs
+    const { orgs, forks } = await this.getForksGraphQlData(provider, syncBranch);
+    this.log(provider.uid, `Forks GraphQL: ${forks.length} forks, ${orgs.length} orgs [${Date.now() - t0}ms]`);
+
+    // Filter forks: must have a parent, not in user's orgs, not in excludeRepos
+    const orgLogins = new Set(orgs);
+    const excludeRepos = (provider.forks?.excludeRepos ?? []).map(r => r.toLowerCase());
+
+    let filteredForks = forks.filter(fork => {
+      if (!fork.parent) return false;
+      if (orgLogins.has(fork.parent.owner.login.toLowerCase())) return false;
+      if (excludeRepos.includes(fork.nameWithOwner.toLowerCase())) return false;
+      return true;
+    });
+
+    // REST compare calls only (N calls — unavoidable, no GraphQL equivalent)
+    const forksWithStatus = await Promise.all(filteredForks.map(async fork => {
+      const upstreamFullName = fork.parent.nameWithOwner;
+      const defaultBranch = fork.parent.defaultBranchRef?.name || 'main';
+      const forkFullName = fork.nameWithOwner;
+
+      const compare = await this.getForkCompareStatus(octokit, forkFullName, upstreamFullName, defaultBranch);
+      const syncPRNodes = fork.pullRequests?.nodes ?? [];
+      const syncPR = syncPRNodes.length > 0 ? { number: syncPRNodes[0].number, url: syncPRNodes[0].url } : null;
+      const syncStatus = gitHubAdapter.determineSyncStatus(compare, syncPR);
+
+      return {
+        fork_name: forkFullName,
+        upstream_name: upstreamFullName,
+        default_branch: defaultBranch,
+        behind_by: compare.behind_by,
+        ahead_by: compare.ahead_by,
+        sync_status: syncStatus,
+        sync_pr_number: syncPR?.number ?? null,
+        sync_pr_url: syncPR?.url ?? null,
+        workflow_file: workflowFile,
+        url: fork.url,
+        upstream_url: fork.parent.url
+      };
+    }));
+
+    this.log(provider.uid, `Forks enrichment complete [${Date.now() - t0}ms]:`, forksWithStatus);
+    return forksWithStatus;
+  },
+
 }
 
 export { gitHubApi };
