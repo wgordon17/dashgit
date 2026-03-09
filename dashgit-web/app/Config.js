@@ -9,7 +9,7 @@ const config = {
   appVersion: "main",
 
   //Configuration data version number, to keep track of changes of data structure and migrations
-  dataVersion: 2,
+  dataVersion: 3,
 
   //Feature flags, keeps boolean flags activated from the querystring ?ff=flag1,flag2...
   ff: {},
@@ -84,6 +84,8 @@ const config = {
       console.log(`Migrating from version ${data.version} to ${this.dataVersion}`);
       if (data.version == 1)
         this.migrateV1toV2(data);
+      if (data.version == 2)
+        this.migrateV2toV3(data);
     }
     data = this.setAllDefaults(data);
     return data;
@@ -129,6 +131,10 @@ const config = {
       this.setDefault(element.graphql, "maxProjects", 20);
       this.setDefault(element.graphql, "pageSize", 10); // only GitHub is paginated
       this.setDefault(element.graphql, "maxBranches", 10);
+      this.setDefault(element, "forks", {});
+      this.setDefault(element.forks, "excludeRepos", []);
+      this.setDefault(element.forks, "syncWorkflowFile", "upstream-sync.yml");
+      this.setDefault(element.forks, "syncBranch", "upstream-sync");
     } else if (element.provider == "GitLab") {
       this.setDefault(element, "url", "");
       this.setDefault(element, "dependabotUser", "dependabot");
@@ -158,12 +164,18 @@ const config = {
     this.setDefault(data.viewFilter.statuses, "compact", false);
     this.setDefault(data.viewFilter.statuses, "exclude", "");
     this.setDefault(data.viewFilter.dependabot, "exclude", "");
+    this.setDefault(data.viewFilter, "forks", {});
+    this.setDefault(data.viewFilter.forks, "exclude", "");
   },
   setDefault: function (parent, property, value) {
     if (parent[property] == undefined || parent[property] == null)
       parent[property] = value;
   },
   
+  migrateV2toV3: function(configData) {
+    // No property renames needed; fork config defaults are filled by setAllDefaults
+    configData.version = 3;
+  },
   migrateV1toV2: function(configData) {
     this.renameProperty(configData, "enableCombinedUpdates", configData, "enableManagerRepo");
     this.renameProperty(configData, "updateManagerRepo", configData, "managerRepoName");

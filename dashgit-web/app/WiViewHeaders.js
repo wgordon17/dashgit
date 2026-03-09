@@ -10,6 +10,8 @@ const wiHeaders = {
       header = this.updateHeader2html();
     else if (target == "follow-up")
       header = this.followUpHeader2html();
+    else if (target == "forks")
+      header = this.forksHeader2html();
 
     // An additional view filter header to specify addtional filtering options as indicated in the config
     return this.viewFilterHeader2html(target, config.data.viewFilter[target]) + header;
@@ -101,6 +103,17 @@ const wiHeaders = {
    `;
    return html;
  },
+
+  forksHeader2html: function () {
+    return `
+    <div style="padding-left:8px">
+      <p class="mb-3 mt-2">
+        This view shows the sync status of your forked repositories compared to their upstream sources.
+        Forks that are behind can be synced by triggering the upstream-sync workflow.
+      </p>
+    </div>
+    `;
+  },
 
   // Generic view header to perform additional filtering, these filters are specified in the config
   viewFilterHeader2html: function (target, viewFilters) {

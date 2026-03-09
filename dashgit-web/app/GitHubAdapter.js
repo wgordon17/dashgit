@@ -256,6 +256,34 @@ const gitHubAdapter = {
     return reposToUpdate.trim();
   },
 
+  forks2model: function (provider, forksData) {
+    let m = new Model().setHeader(provider.provider, provider.uid, provider.user, "");
+    for (let item of forksData) {
+      m.addItem({
+        repo_name: item.fork_name, type: 'fork', iid: '',
+        title: item.upstream_name, actions: {
+          behind_by: item.behind_by, ahead_by: item.ahead_by,
+          sync_status: item.sync_status,
+          sync_pr_number: item.sync_pr_number, sync_pr_url: item.sync_pr_url,
+          workflow_file: item.workflow_file, default_branch: item.default_branch
+        },
+        author: '', assignees: '', created_at: '', updated_at: '',
+        iidstr: '', url: item.url, repo_url: item.upstream_url,
+        labels: []
+      });
+    }
+    return m;
+  },
+
+  determineSyncStatus: function (compare, syncPR) {
+    if (compare.status === 'unknown') return 'unknown';
+    if (syncPR) return 'pr-open';
+    if (compare.behind_by > 0 && compare.ahead_by > 0) return 'diverged';
+    if (compare.behind_by > 0) return 'behind';
+    if (compare.ahead_by > 0) return 'ahead';
+    return 'up-to-date';
+  },
+
 }
 
 export { gitHubAdapter };

@@ -182,6 +182,54 @@ const wiRender = {
     return 0.2126 * r + 0.7152 * g + 0.0722 * b; // per ITU-R BT.709
   },
 
+  escHtml: function (str) {
+    return $("<span>").text(str).html();
+  },
+
+  forkRow2html: function (item) {
+    const esc = this.escHtml;
+    const actions = item.actions ?? {};
+    const repoName = esc(item.repo_name);
+    const upstreamName = esc(item.title);
+    const forkUrl = esc(item.url);
+    const upstreamUrl = esc(item.repo_url);
+    const workflowFile = esc(actions.workflow_file);
+    const defaultBranch = esc(actions.default_branch || 'main');
+
+    // Status badges: count badges for behind/ahead, named badges for terminal states
+    let statusHtml = '';
+    if (actions.sync_status === 'unknown') {
+      statusHtml = `<span class="badge bg-secondary">unknown</span>`;
+    } else if (actions.behind_by > 0 || actions.ahead_by > 0) {
+      if (actions.behind_by > 0)
+        statusHtml += `<span class="badge bg-warning text-dark">${actions.behind_by} behind</span> `;
+      if (actions.ahead_by > 0)
+        statusHtml += `<span class="badge bg-info text-dark">${actions.ahead_by} ahead</span> `;
+    } else {
+      statusHtml = `<span class="badge bg-success">up to date</span> `;
+    }
+    if (actions.sync_pr_number)
+      statusHtml += `<a href="${esc(actions.sync_pr_url)}" target="_blank" class="badge bg-primary text-decoration-none">PR #${parseInt(actions.sync_pr_number)}</a>`;
+
+    const syncButton = actions.behind_by > 0 && actions.sync_status !== 'pr-open'
+      ? ` <button class="btn btn-warning btn-sm wi-fork-sync-btn" data-fork="${repoName}" data-workflow="${workflowFile}" data-ref="${defaultBranch}">
+          <i class="fa-solid fa-arrows-rotate"></i> Sync</button>`
+      : '';
+
+    return `
+    <tr class="wi-status-class-any" itemrepo="${repoName}">
+      <td style="width:24px;"><i class="fa-solid fa-code-fork" style="color:DodgerBlue"></i></td>
+      <td>
+        <span class="fw-bold"><a href="${forkUrl}" target="_blank" class="link-dark link-underline-opacity-0 link-underline-opacity-100-hover">${repoName}</a></span>
+        <span class="text-secondary"> &larr; </span>
+        <span><a href="${upstreamUrl}" target="_blank" class="link-secondary link-underline-opacity-0 link-underline-opacity-100-hover">${upstreamName}</a></span>
+      </td>
+      <td>${statusHtml}</td>
+      <td>${syncButton}</td>
+    </tr>
+    `;
+  },
+
 }
 
 export { wiRender };

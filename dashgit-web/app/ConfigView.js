@@ -158,6 +158,8 @@ const configView = {
             "The provider with this username and same repository url will be used to get the statuses, instead of calling the GraphQL API")}
         </div>
 
+        ${provider.provider == "GitHub" ? this.forks2html(provider, key) : ""}
+
         <div class="config-provider-updates-div-container">
         <div class="card-subtitle h6 mb-1 mt-1 text-body-secondary">Combined dependency updates, additional parameters:
           <a href="${config.param.readmeDependencyUpdates}" target="_blank">[learn more]</a></div>
@@ -180,6 +182,20 @@ const configView = {
     </div>
     `;
   },
+  forks2html: function (provider, key) {
+    return `
+        <div class="card-subtitle h6 mb-1 mt-1 text-body-secondary">Fork tracking parameters:</div>
+        <div class="row">
+          ${this.array2html(`config-forks-excludeRepos-${key}`, "text", "Exclude repos from forks view", provider.forks?.excludeRepos ?? [], '', "250", "300",
+            "Repository full names (OWNER/REPO) to exclude from the Forks tab view, separated by spaces")}
+          ${this.input2html(`config-forks-syncWorkflowFile-${key}`, "text", "Sync workflow file", provider.forks?.syncWorkflowFile ?? "upstream-sync.yml", '', "200", "200",
+            "The filename of the GitHub Actions workflow that syncs with upstream")}
+          ${this.input2html(`config-forks-syncBranch-${key}`, "text", "Sync branch name", provider.forks?.syncBranch ?? "upstream-sync", '', "200", "200",
+            "The branch name used by the sync workflow to create the sync PR")}
+        </div>
+    `;
+  },
+
   anyGitHubWithoutToken: function (data) {
     for (let provider of data.providers)
       if (provider.provider == "GitHub" && provider.token == "")
@@ -244,6 +260,9 @@ const configView = {
       if (provider.graphql.ownerAffiliations.length == 0) //default if none selected
         provider.graphql.ownerAffiliations.push("OWNER");
       provider.graphql.userSpecRepos = $(`#config-graphql-userSpecRepos-${id}`).val().trim();
+      provider.forks.excludeRepos = this.str2array($(`#config-forks-excludeRepos-${id}`).val());
+      provider.forks.syncWorkflowFile = $(`#config-forks-syncWorkflowFile-${id}`).val().trim();
+      provider.forks.syncBranch = $(`#config-forks-syncBranch-${id}`).val().trim();
     }
     return provider;
   },

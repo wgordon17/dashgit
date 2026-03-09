@@ -8,7 +8,7 @@ import { wiServices } from "./WiServices.js"
  */
 const wiView = {
   //only api-related target. Note that statuses is named Branches in the UI tab
-  allTargets: ["assigned", "involved", "created", "unassigned", "follow-up", "dependabot", "statuses"],
+  allTargets: ["assigned", "involved", "created", "unassigned", "follow-up", "dependabot", "statuses", "forks"],
 
   setLoading(value) {
     setTimeout(function () {
@@ -529,6 +529,50 @@ const wiView = {
     $("#wi-follow-up-btn-end").text("");
     $("#wi-follow-up-btn-error").hide();
     $("#wi-follow-up-btn-error").text("");
+  },
+
+  // Forks view rendering (custom path, does not go through renderWorkItems).
+  // The accordion wrapper is created by dispatchForks; this appends accordion-items.
+  renderForks: function (providerId, model) {
+    const target = "forks";
+    let header = model.header;
+    let items = model.items;
+    let provider = header.uid;
+
+    let html = `
+    <div class="accordion-item">
+      <h4 class="accordion-header">
+        <button id="wi-providers-panelbutton-${target}-${provider}"
+            wi-providers-panelbutton-provider="${provider}"
+            class="${this.statePanelButton(target, provider)}"
+            type="button" data-bs-toggle="collapse"
+            data-bs-target="#wi-providers-panel-${target}-${provider}"
+            aria-expanded="${this.statePanelAria(target, provider)}"
+            aria-controls="wi-providers-panel-${target}-${provider}">
+          <p class="m-0">
+            <span class='h4'>${wiRender.provider2html(header.provider)} ${header.provider} - ${header.user}</span>
+          </p>
+        </button>
+      </h4>
+      <div id="wi-providers-panel-${target}-${provider}"
+          class="${this.statePanelBody(target, provider)}">
+        <div class="accordion-body">`;
+
+    if (items.length == 0) {
+      html += `<p>No forks found for this provider. ${header.message}</p>`;
+    } else {
+      html += `<table id="wi-items-${target}_${provider}_all" class='table table-sm table-borderless m-0'><tbody>`;
+      for (let item of items)
+        html += wiRender.forkRow2html(item);
+      html += `</tbody></table>`;
+    }
+
+    html += `</div></div></div>`;
+
+    $(`#${target} #wi-providers-panel`).append(html);
+
+    // Apply exclude filter after rendering
+    this.updateUiVisibility(`wi-items-${target}_${provider}_all`, target);
   },
 
   //Memoria de los paneles acordeon de cada target+provider

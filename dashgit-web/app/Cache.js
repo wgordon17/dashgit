@@ -14,6 +14,7 @@ const cache = {
   // allow to control when to update or refresh the cache data
   // { provider: { updateTime: last-update-date, refreshTime: last-refresh-date, model: model-instance }}
   ////////////////////////////////////////////////////////////////////////////////////////
+  forksCache: {},
   modelCache: {},
 
   initialized: function (provider) {
@@ -110,6 +111,7 @@ const cache = {
       this.notifCache = {};
       this.statusCache = {};
       this.labelsCache = {};
+      this.forksCache = {};
     }
     this.resetStatusSurrogates(config.data.providers);
   },

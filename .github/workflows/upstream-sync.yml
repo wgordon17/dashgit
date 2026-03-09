@@ -1,0 +1,107 @@
+# Syncs this fork with the upstream repository by creating a PR when behind.
+# Can be triggered manually or runs on a weekly schedule.
+name: Upstream Sync
+
+on:
+  schedule:
+    - cron: '0 6 * * 1' # Every Monday at 06:00 UTC
+  workflow_dispatch:
+
+env:
+  UPSTREAM_REPO: javiertuya/dashgit
+  UPSTREAM_BRANCH: main
+  SYNC_BRANCH: upstream-sync
+  TARGET_BRANCH: main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add upstream remote and fetch
+        env:
+          UPSTREAM_REPO_REF: ${{ env.UPSTREAM_REPO }}
+          UPSTREAM_BRANCH_REF: ${{ env.UPSTREAM_BRANCH }}
+        run: |
+          git remote add upstream "https://github.com/${UPSTREAM_REPO_REF}.git"
+          git fetch upstream "${UPSTREAM_BRANCH_REF}"
+
+      - name: Check how far behind upstream
+        id: check
+        env:
+          UPSTREAM_BRANCH_REF: ${{ env.UPSTREAM_BRANCH }}
+        run: |
+          BEHIND=$(git rev-list --count "HEAD..upstream/${UPSTREAM_BRANCH_REF}")
+          echo "behind=$BEHIND" >> "$GITHUB_OUTPUT"
+          echo "This fork is $BEHIND commit(s) behind upstream/${UPSTREAM_BRANCH_REF}"
+
+      - name: Sync with upstream
+        if: steps.check.outputs.behind != '0'
+        id: sync
+        env:
+          SYNC_BRANCH_REF: ${{ env.SYNC_BRANCH }}
+          TARGET_BRANCH_REF: ${{ env.TARGET_BRANCH }}
+          UPSTREAM_BRANCH_REF: ${{ env.UPSTREAM_BRANCH }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Create or reset the sync branch from the target branch
+          git checkout -B "${SYNC_BRANCH_REF}" "origin/${TARGET_BRANCH_REF}"
+
+          # Attempt to merge upstream.
+          # Note: --strategy-option theirs resolves content conflicts by taking upstream's version,
+          # but delete/modify conflicts (where upstream deletes a file we modified) may still
+          # require manual resolution. The fallback below handles this by accepting theirs.
+          MERGE_CONFLICT=false
+          if ! git merge "upstream/${UPSTREAM_BRANCH_REF}" --no-edit --strategy-option theirs; then
+            MERGE_CONFLICT=true
+            # Resolve any remaining conflicts (including delete/modify) by accepting theirs
+            git checkout --theirs .
+            git add -A
+            git commit -m "Merge upstream/${UPSTREAM_BRANCH_REF} (conflicts resolved with theirs)"
+          fi
+
+          echo "merge_conflict=$MERGE_CONFLICT" >> "$GITHUB_OUTPUT"
+
+          # Push the sync branch
+          git push --force-with-lease origin "${SYNC_BRANCH_REF}"
+
+      - name: Create Pull Request
+        if: steps.check.outputs.behind != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MERGE_CONFLICT: ${{ steps.sync.outputs.merge_conflict }}
+          BEHIND: ${{ steps.check.outputs.behind }}
+          UPSTREAM_REPO_REF: ${{ env.UPSTREAM_REPO }}
+          SYNC_BRANCH_REF: ${{ env.SYNC_BRANCH }}
+          TARGET_BRANCH_REF: ${{ env.TARGET_BRANCH }}
+        run: |
+          BODY="Sync with upstream ${UPSTREAM_REPO_REF} (${BEHIND} commits behind)."
+
+          if [ "$MERGE_CONFLICT" = "true" ]; then
+            BODY="$BODY
+
+          **WARNING:** Merge conflicts were detected and resolved automatically using the upstream version (--strategy-option theirs). Please review the changes carefully."
+          fi
+
+          # Check if a PR already exists for the sync branch
+          EXISTING_PR=$(gh pr list --head "${SYNC_BRANCH_REF}" --base "${TARGET_BRANCH_REF}" --state open --json number --jq '.[0].number')
+          if [ -n "$EXISTING_PR" ]; then
+            echo "PR #$EXISTING_PR already exists for ${SYNC_BRANCH_REF} -> ${TARGET_BRANCH_REF}, skipping creation."
+          else
+            gh pr create \
+              --title "chore: sync with upstream (${BEHIND} commits)" \
+              --body "$BODY" \
+              --head "${SYNC_BRANCH_REF}" \
+              --base "${TARGET_BRANCH_REF}"
+          fi

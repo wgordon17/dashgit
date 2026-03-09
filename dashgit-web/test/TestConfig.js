@@ -15,15 +15,16 @@ import { cache } from "../app/Cache.js"
 describe("TestConfig - Sanitizing config data", async function () {
 
     it("Set default config attributes when reading empty", function () {
-        let expected = { version: 2, encrypted: false, statusCacheRefreshTime: 3600, statusCacheUpdateTime: 30, maxAge: 0, 
-            viewFilter: { 
+        let expected = { version: 3, encrypted: false, statusCacheRefreshTime: 3600, statusCacheUpdateTime: 30, maxAge: 0,
+            viewFilter: {
                 involved: {authorMe: true, authorOthers: true, exclude: ""},
                 created: {exclude: ""},
                 unassigned: {authorMe: true, authorOthers: true},
                 statuses: {compact: false, exclude: ""},
                 dependabot: {exclude: ""},
-            },      
-            appLastVersion: "", 
+                forks: {exclude: ""},
+            },
+            appLastVersion: "",
             enableManagerRepo: false, managerRepoName: "", managerRepoToken: "",
             providers: [] };
         assert.deepEqual(expected, config.parseAndSanitizeData(""));
@@ -33,15 +34,16 @@ describe("TestConfig - Sanitizing config data", async function () {
 
     it("Set default config attributes to GitHub provider", function () {
         let expected = {
-            version: 2,
+            version: 3,
             appLastVersion: "",
             encrypted: false, statusCacheRefreshTime: 3600, statusCacheUpdateTime: 60, maxAge: 0,
-            viewFilter: { 
+            viewFilter: {
                 involved: {authorMe: true, authorOthers: true, exclude: ""},
                 created: {exclude: ""},
                 unassigned: {authorMe: true, authorOthers: true},
                 statuses: {compact: false, exclude: ""},
                 dependabot: {exclude: ""},
+                forks: {exclude: ""},
             },
             enableManagerRepo: false, managerRepoName: "", managerRepoToken: "",
             providers: [{
@@ -51,9 +53,10 @@ describe("TestConfig - Sanitizing config data", async function () {
                 statusSurrogateUser: "",
                 filterIfLabel: '', unassignedAdditionalOwner: [], dependabotAdditionalOwner: [],
                 updates: { tokenSecret: "", userEmail: "" },
-                graphql: { "includeForks": false, "onlyForks": false, deprecatedGraphqlV1: false, 
-                    ownerAffiliations: ['OWNER'], 
-                    userSpecRepos: "", maxProjects: 20, maxBranches: 10, pageSize: 10 
+                forks: { excludeRepos: [], syncWorkflowFile: "upstream-sync.yml", syncBranch: "upstream-sync" },
+                graphql: { "includeForks": false, "onlyForks": false, deprecatedGraphqlV1: false,
+                    ownerAffiliations: ['OWNER'],
+                    userSpecRepos: "", maxProjects: 20, maxBranches: 10, pageSize: 10
                 }
             }]
         };
@@ -62,16 +65,17 @@ describe("TestConfig - Sanitizing config data", async function () {
 
     it("No attributes are overriden by defaults if already set", function () {
         let expected = {
-            version: 2,
+            version: 3,
             appLastVersion: "",
             encrypted: false, statusCacheRefreshTime: 3600, statusCacheUpdateTime: 30, maxAge: 0,
-            viewFilter: { 
+            viewFilter: {
                 involved: {authorMe: true, authorOthers: true, exclude: ""},
                 created: {exclude: ""},
                 unassigned: {authorMe: true, authorOthers: true},
                 statuses: {compact: false, exclude: ""},
                 dependabot: {exclude: ""},
-            },      
+                forks: {exclude: ""},
+            },
             enableManagerRepo: false, managerRepoName: "", managerRepoToken: "",
             providers: [{
                 provider: 'GitHub', uid: 'repo_user_id', user: 'user', token: 'XXXXXXXXXXXX', enabled: false,
@@ -80,13 +84,68 @@ describe("TestConfig - Sanitizing config data", async function () {
                 statusSurrogateUser: "",
                 filterIfLabel: 'lbl', unassignedAdditionalOwner: [], dependabotAdditionalOwner: ["org1", "org2"],
                 updates: { tokenSecret: "DASHGIT_GITHUB_USER_TOKEN", userEmail: "" },
-                graphql: { "includeForks": false, "onlyForks": false, deprecatedGraphqlV1: false, 
-                    ownerAffiliations: ['OWNER', 'ORGANIZATION_MEMBER'], 
+                forks: { excludeRepos: [], syncWorkflowFile: "upstream-sync.yml", syncBranch: "upstream-sync" },
+                graphql: { "includeForks": false, "onlyForks": false, deprecatedGraphqlV1: false,
+                    ownerAffiliations: ['OWNER', 'ORGANIZATION_MEMBER'],
                     userSpecRepos: "", maxProjects: 10, maxBranches: 20, pageSize: 10
                 }
             }]
         };
         assert.deepEqual(expected, config.parseAndSanitizeData(JSON.stringify(expected)));
+    });
+
+    it("Migrate v2 config to v3 and add fork defaults", function () {
+        let v2Config = {
+            version: 2,
+            encrypted: false, statusCacheRefreshTime: 3600, statusCacheUpdateTime: 30, maxAge: 0,
+            viewFilter: {
+                involved: {authorMe: true, authorOthers: true, exclude: ""},
+                created: {exclude: ""},
+                unassigned: {authorMe: true, authorOthers: true},
+                statuses: {compact: false, exclude: ""},
+                dependabot: {exclude: ""},
+            },
+            appLastVersion: "",
+            enableManagerRepo: false, managerRepoName: "", managerRepoToken: "",
+            providers: [{
+                provider: 'GitHub', uid: '', user: 'testuser', token: '', enabled: true,
+                url: 'https://github.com', api: 'https://api.github.com',
+                enableNotifications: true, statusSurrogateUser: "",
+                filterIfLabel: '', unassignedAdditionalOwner: [], dependabotAdditionalOwner: [],
+                updates: { tokenSecret: "DASHGIT_GITHUB_TESTUSER_TOKEN", userEmail: "" },
+                graphql: { includeForks: false, onlyForks: false, deprecatedGraphqlV1: false,
+                    ownerAffiliations: ['OWNER'], userSpecRepos: "", maxProjects: 20, maxBranches: 10, pageSize: 10
+                }
+            }]
+        };
+        let result = config.parseAndSanitizeData(JSON.stringify(v2Config));
+        // Version bumped to 3
+        assert.equal(3, result.version);
+        // Fork view filter defaults added
+        assert.deepEqual({exclude: ""}, result.viewFilter.forks);
+        // Provider fork defaults added
+        assert.deepEqual([], result.providers[0].forks.excludeRepos);
+        assert.equal("upstream-sync.yml", result.providers[0].forks.syncWorkflowFile);
+        assert.equal("upstream-sync", result.providers[0].forks.syncBranch);
+    });
+
+    it("Preserve existing fork config values on re-sanitize", function () {
+        let configWithForks = {
+            version: 3,
+            providers: [{
+                provider: 'GitHub',
+                forks: { excludeRepos: ["org/repo1", "org/repo2"], syncWorkflowFile: "custom-sync.yml", syncBranch: "my-sync-branch" }
+            }]
+        };
+        let result = config.parseAndSanitizeData(JSON.stringify(configWithForks));
+        assert.deepEqual(["org/repo1", "org/repo2"], result.providers[0].forks.excludeRepos);
+        assert.equal("custom-sync.yml", result.providers[0].forks.syncWorkflowFile);
+        assert.equal("my-sync-branch", result.providers[0].forks.syncBranch);
+    });
+
+    it("GitLab providers do not get fork defaults", function () {
+        let result = config.parseAndSanitizeData(`{ "providers": [{"provider":"GitLab", "url":"https://gitlab.com"}] }`);
+        assert.equal(undefined, result.providers[0].forks);
     });
 
     // - surrogate match before/after surrogated
