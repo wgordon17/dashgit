@@ -2,6 +2,7 @@ import { gitHubApi } from "./GitHubApi.js"
 import { gitHubAdapter } from "./GitHubAdapter.js"
 import { gitLabApi } from "./GitLabApi.js"
 import { wiView } from "./WiView.js"
+import { wiHeaders } from "./WiViewHeaders.js"
 import { Model } from "./Model.js"
 import { cache } from "./Cache.js"
 import { config } from "./Config.js"
@@ -260,7 +261,11 @@ const wiController = {
   // Forks view
 
   dispatchForks: async function () {
-    $(`#forks`).html("");
+    // Set up accordion wrapper once; renderForks appends accordion-items into it
+    let html = `<div class="accordion" id="wi-providers-panel">`;
+    html += wiHeaders.allProvidersHeader2html("forks");
+    html += `</div>`;
+    $(`#forks`).html(html);
     const promises = [];
     for (let provider of config.data.providers)
       if (provider.enabled && provider.provider === "GitHub")
@@ -310,7 +315,7 @@ const wiController = {
 $(document).on('click', '.wi-fork-sync-btn', function (e) {
   const forkFullName = $(this).attr('data-fork');
   const workflowFile = $(this).attr('data-workflow');
-  const ref = $(this).attr('data-ref') || 'main';
+  const ref = $(this).attr('data-ref');
   // Find the provider from the accordion panel
   const providerButton = $(this).closest('.accordion-item').find('[wi-providers-panelbutton-provider]');
   const providerId = providerButton.attr('wi-providers-panelbutton-provider');

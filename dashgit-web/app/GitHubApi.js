@@ -339,6 +339,8 @@ const gitHubApi = {
   // Fork tracking API methods
 
   getForksGraphQlQuery: function (syncBranch, pageSize, cursor) {
+    // Sanitize syncBranch to prevent GraphQL injection from user config
+    syncBranch = syncBranch.replace(/["\\\n\r{}()]/g, '');
     return `{
       viewer {
         organizations(first: 100) {
@@ -435,6 +437,7 @@ const gitHubApi = {
     });
 
     // REST compare calls only (N calls — unavoidable, no GraphQL equivalent)
+    // TODO: add concurrency limit for users with many forks to avoid rate limiting
     const forksWithStatus = await Promise.all(filteredForks.map(async fork => {
       const upstreamFullName = fork.parent.nameWithOwner;
       const defaultBranch = fork.parent.defaultBranchRef?.name || 'main';

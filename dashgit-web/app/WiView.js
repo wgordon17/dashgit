@@ -531,17 +531,15 @@ const wiView = {
     $("#wi-follow-up-btn-error").text("");
   },
 
-  // Forks view rendering (custom path, does not go through renderWorkItems)
+  // Forks view rendering (custom path, does not go through renderWorkItems).
+  // The accordion wrapper is created by dispatchForks; this appends accordion-items.
   renderForks: function (providerId, model) {
     const target = "forks";
-    let html = `<div class="accordion" id="wi-providers-panel">`;
-    html += wiHeaders.allProvidersHeader2html(target);
-
     let header = model.header;
     let items = model.items;
     let provider = header.uid;
 
-    html += `
+    let html = `
     <div class="accordion-item">
       <h4 class="accordion-header">
         <button id="wi-providers-panelbutton-${target}-${provider}"
@@ -570,15 +568,8 @@ const wiView = {
     }
 
     html += `</div></div></div>`;
-    html += `</div>`;
 
-    // Append to existing content (multiple providers) or set initial content
-    if ($(`#${target} #wi-providers-panel`).length > 0)
-      $(`#${target} #wi-providers-panel`).append(
-        html.replace('<div class="accordion" id="wi-providers-panel">', '').replace(/<\/div>$/, '')
-      );
-    else
-      $(`#${target}`).html(html);
+    $(`#${target} #wi-providers-panel`).append(html);
 
     // Apply exclude filter after rendering
     this.updateUiVisibility(`wi-items-${target}_${provider}_all`, target);

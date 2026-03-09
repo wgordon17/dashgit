@@ -173,6 +173,7 @@ const config = {
   },
   
   migrateV2toV3: function(configData) {
+    // No property renames needed; fork config defaults are filled by setAllDefaults
     configData.version = 3;
   },
   migrateV1toV2: function(configData) {
