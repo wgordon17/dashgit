@@ -221,7 +221,7 @@ const wiRender = {
   },
 
   actionWorkflowHeader2html: function (workflowName, runCount, workflowId, repoName) {
-    return '<tr class="wi-action-workflow-header" data-workflow="' + workflowId + '" data-repo="' + this.escHtml(repoName) + '" style="cursor:pointer">'
+    return '<tr class="wi-action-workflow-header" data-workflow="' + this.escHtml(String(workflowId)) + '" data-repo="' + this.escHtml(repoName) + '" style="cursor:pointer">'
       + '<td colspan="4" style="padding-left:20px">'
       + '<i class="fa-solid fa-gear" style="color:DodgerBlue"></i> '
       + '<strong>' + this.escHtml(workflowName) + '</strong> '
@@ -237,7 +237,7 @@ const wiRender = {
     let duration = this.formatDuration(actions.run_started_at, item.updated_at, actions.status);
     let eventBadge = actions.event ? '<span class="badge bg-light text-dark border">' + this.escHtml(actions.event) + '</span>' : '';
     let branchBadge = actions.head_branch ? '<span class="badge badge-light fw-bold" style="color:black; background-color:#DDF4FF;">' + this.escHtml(actions.head_branch) + '</span>' : '';
-    return '<tr class="wi-status-class-any wi-status-class-' + statusClass + '" itemrepo="' + this.escHtml(item.repo_name) + '" data-workflow="' + actions.workflow_id + '" data-repo="' + this.escHtml(item.repo_name) + '" style="padding-left:40px">'
+    return '<tr class="wi-status-class-any wi-status-class-' + statusClass + '" itemrepo="' + this.escHtml(item.repo_name) + '" data-workflow="' + this.escHtml(String(actions.workflow_id)) + '" data-repo="' + this.escHtml(item.repo_name) + '" style="padding-left:40px">'
       + '<td style="width:24px;">' + badge + '</td>'
       + '<td>'
       + branchBadge + ' '

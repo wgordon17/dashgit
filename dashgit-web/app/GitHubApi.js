@@ -490,18 +490,22 @@ const gitHubApi = {
     let octokit = new Octokit({ userAgent: this.userAgent, auth: token });
     let results = {};
     this.log(provider.uid, "Getting actions data for " + repos.length + " repos");
-    await Promise.allSettled(repos.map(async (repo) => {
-      try {
-        let response = await octokit.request('GET /repos/{owner}/{repo}/actions/runs', {
-          owner: repo.owner,
-          repo: repo.repo,
-          per_page: 100
-        });
-        results[repo.full_name] = response.data.workflow_runs;
-      } catch (error) {
-        this.log(provider.uid, "Skipping " + repo.full_name + ": " + error.message);
-      }
-    }));
+    let batchSize = 10;
+    for (let i = 0; i < repos.length; i += batchSize) {
+      let batch = repos.slice(i, i + batchSize);
+      await Promise.allSettled(batch.map(async (repo) => {
+        try {
+          let response = await octokit.request('GET /repos/{owner}/{repo}/actions/runs', {
+            owner: repo.owner,
+            repo: repo.repo,
+            per_page: 100
+          });
+          results[repo.full_name] = response.data.workflow_runs;
+        } catch (error) {
+          this.log(provider.uid, "Skipping " + repo.full_name + ": " + error.message);
+        }
+      }));
+    }
     return results;
   },
 

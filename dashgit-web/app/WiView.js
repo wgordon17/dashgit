@@ -9,6 +9,8 @@ import { wiServices } from "./WiServices.js"
 const wiView = {
   //only api-related target. Note that statuses is named Branches in the UI tab
   allTargets: ["assigned", "involved", "created", "unassigned", "follow-up", "dependabot", "statuses", "forks", "actions"],
+  _actionsClickBound: false,
+  _wfAccumulator: 0,
 
   setLoading(value) {
     setTimeout(function () {
@@ -291,6 +293,7 @@ const wiView = {
     let filterRepoInclude = $("#inputFilterRepoInclude").val().trim().toLowerCase();
     let filterRepoExclude = $(`#wi-view-filter-${targetName}-exclude`)?.val()?.trim()?.toLowerCase() ?? ""; // not in all views
     let visibleCount = 0;
+    this._wfAccumulator = 0;
     for (let i = target.length - 1; i >= 0; i--) {
       let row = target[i];
       if (row.attributes.class != undefined) {
@@ -312,13 +315,17 @@ const wiView = {
       // When a row represents a grouping (class wi-status-class-header),
       // if all inner rows are hidden (display:none), it should be hidden too
       } else if ($(row).hasClass("wi-status-class-header")) { //a header, check visibleCount
-        this.showIf(row, visibleCount != 0);
+        let totalVisible = this._wfAccumulator + visibleCount;
+        this.showIf(row, totalVisible != 0);
         visibleCount = 0; //begin next header
+        this._wfAccumulator = 0;
 
-      // Workflow sub-headers: hide when no visible runs, but do NOT reset visibleCount
-      // (the count propagates to the repo header above)
+      // Workflow sub-headers: show/hide based on runs in THIS workflow only,
+      // then accumulate into repo-level total for the repo header above
       } else if ($(row).hasClass("wi-action-workflow-header")) {
         this.showIf(row, visibleCount != 0);
+        this._wfAccumulator += visibleCount;
+        visibleCount = 0;
 
       // Special case for branch compact view, each repo group is a single row, that will be hidden here if required
       } else if ($(row).hasClass("wi-status-class-branch-compact")) {
