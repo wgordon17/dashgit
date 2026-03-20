@@ -15,6 +15,7 @@ const cache = {
   // { provider: { updateTime: last-update-date, refreshTime: last-refresh-date, model: model-instance }}
   ////////////////////////////////////////////////////////////////////////////////////////
   forksCache: {},
+  actionsRawCache: {},
   modelCache: {},
 
   initialized: function (provider) {
@@ -112,6 +113,7 @@ const cache = {
       this.statusCache = {};
       this.labelsCache = {};
       this.forksCache = {};
+      this.actionsRawCache = {};
     }
     this.resetStatusSurrogates(config.data.providers);
   },

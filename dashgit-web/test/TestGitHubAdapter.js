@@ -131,3 +131,128 @@ describe("TestGitHubAdapter - Model transformations from GitHub API results", fu
     });
 
 });
+
+describe("TestGitHubAdapter - Actions model", function () {
+    it("Transform GitHub Actions runs with fixture comparison", function () {
+        let input = JSON.parse(fs.readFileSync('./input/github-actions-runs.json'));
+        let provider = { provider: 'GitHub', uid: '0-github', user: 'usr1', actions: { maxRunsPerWorkflow: 3 } };
+        let actual = gitHubAdapter.actions2model(provider, input, false);
+        fs.writeFileSync('./actual/github-actions-model.json', JSON.stringify(actual, null, 2));
+        let expected = JSON.parse(fs.readFileSync('./expected/github-actions-model.json'));
+        assert.deepEqual(expected, actual);
+    });
+
+    it("Basic actions2model transform filters PR events by default", function () {
+        let input = JSON.parse(fs.readFileSync('./input/github-actions-runs.json'));
+        let provider = { provider: 'GitHub', uid: '0-github', user: 'usr1', actions: { maxRunsPerWorkflow: 3 } };
+        let actual = gitHubAdapter.actions2model(provider, input, false);
+        // PR event (run_number 43, id 9000020) should be filtered out
+        // wf100 non-PR runs sorted by created_at desc: 9000001(42), 9000002(41), 9000003(40), 9000004(39) -> top 3: 42,41,40
+        // wf200: 1 run (id 9000010)
+        // wf300: 2 runs (id 9000100, 9000101)
+        assert.equal(actual.items.length, 6);
+        actual.items.forEach(item => {
+            assert.notEqual(item.actions.event, "pull_request");
+        });
+    });
+
+    it("actions2model includes PR events when showPrRuns is true", function () {
+        let input = JSON.parse(fs.readFileSync('./input/github-actions-runs.json'));
+        let provider = { provider: 'GitHub', uid: '0-github', user: 'usr1', actions: { maxRunsPerWorkflow: 3 } };
+        let actual = gitHubAdapter.actions2model(provider, input, true);
+        // With PR events, wf100 runs sorted desc: 9000020(43 PR,11:00), 9000001(42,10:00), 9000002(41,09:00), 9000003(40,08:00) -> top 3: 43,42,41
+        // wf200: 1 run, wf300: 2 runs
+        assert.equal(actual.items.length, 6);
+        let prItems = actual.items.filter(i => i.actions.event === "pull_request");
+        assert.equal(prItems.length, 1);
+    });
+
+    it("actions2model respects maxRunsPerWorkflow", function () {
+        let input = JSON.parse(fs.readFileSync('./input/github-actions-runs.json'));
+        let provider = { provider: 'GitHub', uid: '0-github', user: 'usr1', actions: { maxRunsPerWorkflow: 1 } };
+        let actual = gitHubAdapter.actions2model(provider, input, false);
+        // maxRunsPerWorkflow=1: 1 per workflow = wf100(1) + wf200(1) + wf300(1) = 3
+        assert.equal(actual.items.length, 3);
+    });
+
+    it("actions2model uses run_id for unique iid", function () {
+        let input = JSON.parse(fs.readFileSync('./input/github-actions-runs.json'));
+        let provider = { provider: 'GitHub', uid: '0-github', user: 'usr1', actions: { maxRunsPerWorkflow: 10 } };
+        let actual = gitHubAdapter.actions2model(provider, input, true);
+        // All iids should be unique (using run.id, not run_number)
+        let iids = actual.items.map(i => i.iid);
+        let uniqueIids = new Set(iids);
+        assert.equal(uniqueIids.size, iids.length);
+    });
+
+    it("actions2model handles empty input", function () {
+        let provider = { provider: 'GitHub', uid: '0-github', user: 'usr1', actions: { maxRunsPerWorkflow: 3 } };
+        let actual = gitHubAdapter.actions2model(provider, {}, false);
+        assert.equal(actual.items.length, 0);
+        assert.equal(actual.header.uid, '0-github');
+    });
+
+    it("actions2model produces zero items when all runs are PR events and showPrRuns is false", function () {
+        let input = { "org/repo": [
+            { id: 1, workflow_id: 10, name: "CI", run_number: 1, display_title: "CI",
+              status: "completed", conclusion: "success", event: "pull_request",
+              head_branch: "pr-branch", actor: { login: "user" },
+              html_url: "https://github.com/org/repo/actions/runs/1",
+              run_started_at: "2026-01-01T00:00:00Z",
+              created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:01:00Z" }
+        ]};
+        let provider = { provider: 'GitHub', uid: '0-github', user: 'usr1', actions: { maxRunsPerWorkflow: 3 } };
+        let actual = gitHubAdapter.actions2model(provider, input, false);
+        assert.equal(actual.items.length, 0);
+    });
+
+    it("actions2model handles null actor and missing display_title", function () {
+        let input = { "org/repo": [
+            { id: 1, workflow_id: 10, name: "CI", run_number: 1, display_title: "",
+              status: "completed", conclusion: "success", event: "push",
+              head_branch: "main", actor: null,
+              html_url: "https://github.com/org/repo/actions/runs/1",
+              run_started_at: "2026-01-01T00:00:00Z",
+              created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:01:00Z" }
+        ]};
+        let provider = { provider: 'GitHub', uid: '0-github', user: 'usr1', actions: { maxRunsPerWorkflow: 3 } };
+        let actual = gitHubAdapter.actions2model(provider, input, false);
+        assert.equal(actual.items.length, 1);
+        assert.equal(actual.items[0].author, "");
+        assert.equal(actual.items[0].title, "CI"); // falls back to run.name when display_title is empty
+    });
+
+    it("actions2model preserves run_started_at in actions object", function () {
+        let input = JSON.parse(fs.readFileSync('./input/github-actions-runs.json'));
+        let provider = { provider: 'GitHub', uid: '0-github', user: 'usr1', actions: { maxRunsPerWorkflow: 3 } };
+        let actual = gitHubAdapter.actions2model(provider, input, false);
+        // First item (wf100, most recent non-PR) should have run_started_at
+        let firstItem = actual.items[0];
+        assert.equal(firstItem.actions.run_started_at, "2026-03-19T10:00:05Z");
+        // In-progress run should also have run_started_at
+        let inProgressItems = actual.items.filter(i => i.actions.status === "in_progress");
+        assert.equal(inProgressItems.length, 1);
+        assert.equal(inProgressItems[0].actions.run_started_at, "2026-03-19T12:00:05Z");
+    });
+
+    it("actions2model uses default maxRunsPerWorkflow when not configured", function () {
+        let input = JSON.parse(fs.readFileSync('./input/github-actions-runs.json'));
+        let provider = { provider: 'GitHub', uid: '0-github', user: 'usr1' }; // no actions config
+        let actual = gitHubAdapter.actions2model(provider, input, false);
+        // Default maxRunsPerWorkflow is 3, wf100 has 4 non-PR runs, should be sliced to 3
+        let wf100Items = actual.items.filter(i => i.actions.workflow_id === 100);
+        assert.equal(wf100Items.length, 3);
+    });
+
+    it("actions2model sorts runs by created_at descending within each workflow", function () {
+        let input = JSON.parse(fs.readFileSync('./input/github-actions-runs.json'));
+        let provider = { provider: 'GitHub', uid: '0-github', user: 'usr1', actions: { maxRunsPerWorkflow: 10 } };
+        let actual = gitHubAdapter.actions2model(provider, input, false);
+        let wf100Items = actual.items.filter(i => i.actions.workflow_id === 100);
+        // Should be in descending created_at order: 10:00, 09:00, 08:00, 07:00
+        for (let i = 1; i < wf100Items.length; i++) {
+            assert.ok(new Date(wf100Items[i-1].created_at) >= new Date(wf100Items[i].created_at),
+                "Items should be sorted by created_at descending");
+        }
+    });
+});

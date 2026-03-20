@@ -467,6 +467,48 @@ const gitHubApi = {
     return forksWithStatus;
   },
 
+  // Actions tracker API methods
+
+  getReposForActions: async function(provider) {
+    let token = config.decrypt(provider.token);
+    let octokit = new Octokit({ userAgent: this.userAgent, auth: token });
+    this.log(provider.uid, "Getting repos for actions data");
+    let response = await octokit.request('GET /user/repos', {
+      sort: 'pushed',
+      per_page: 100,
+      affiliation: 'owner,collaborator,organization_member'
+    });
+    // Filter out archived and forked repos (they rarely have Actions enabled)
+    return response.data
+      .filter(r => !r.archived && !r.fork)
+      .map(r => ({ owner: r.owner.login, repo: r.name, full_name: r.full_name }));
+  },
+
+  getActionsData: async function(provider) {
+    let repos = await this.getReposForActions(provider);
+    let token = config.decrypt(provider.token);
+    let octokit = new Octokit({ userAgent: this.userAgent, auth: token });
+    let results = {};
+    this.log(provider.uid, "Getting actions data for " + repos.length + " repos");
+    const batchSize = 10;
+    for (let i = 0; i < repos.length; i += batchSize) {
+      let batch = repos.slice(i, i + batchSize);
+      await Promise.allSettled(batch.map(async (repo) => {
+        try {
+          let response = await octokit.request('GET /repos/{owner}/{repo}/actions/runs', {
+            owner: repo.owner,
+            repo: repo.repo,
+            per_page: 100
+          });
+          results[repo.full_name] = response.data.workflow_runs;
+        } catch (error) {
+          this.log(provider.uid, "Skipping " + repo.full_name + ": " + error.message);
+        }
+      }));
+    }
+    return results;
+  },
+
 }
 
 export { gitHubApi };

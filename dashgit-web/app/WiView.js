@@ -8,7 +8,9 @@ import { wiServices } from "./WiServices.js"
  */
 const wiView = {
   //only api-related target. Note that statuses is named Branches in the UI tab
-  allTargets: ["assigned", "involved", "created", "unassigned", "follow-up", "dependabot", "statuses", "forks"],
+  allTargets: ["assigned", "involved", "created", "unassigned", "follow-up", "dependabot", "statuses", "forks", "actions"],
+  _actionsClickBound: false,
+  _wfAccumulator: 0,
 
   setLoading(value) {
     setTimeout(function () {
@@ -291,6 +293,7 @@ const wiView = {
     let filterRepoInclude = $("#inputFilterRepoInclude").val().trim().toLowerCase();
     let filterRepoExclude = $(`#wi-view-filter-${targetName}-exclude`)?.val()?.trim()?.toLowerCase() ?? ""; // not in all views
     let visibleCount = 0;
+    this._wfAccumulator = 0;
     for (let i = target.length - 1; i >= 0; i--) {
       let row = target[i];
       if (row.attributes.class != undefined) {
@@ -312,8 +315,17 @@ const wiView = {
       // When a row represents a grouping (class wi-status-class-header),
       // if all inner rows are hidden (display:none), it should be hidden too
       } else if ($(row).hasClass("wi-status-class-header")) { //a header, check visibleCount
-        this.showIf(row, visibleCount != 0);
+        let totalVisible = this._wfAccumulator + visibleCount;
+        this.showIf(row, totalVisible != 0);
         visibleCount = 0; //begin next header
+        this._wfAccumulator = 0;
+
+      // Workflow sub-headers: show/hide based on runs in THIS workflow only,
+      // then accumulate into repo-level total for the repo header above
+      } else if ($(row).hasClass("wi-action-workflow-header")) {
+        this.showIf(row, visibleCount != 0);
+        this._wfAccumulator += visibleCount;
+        visibleCount = 0;
 
       // Special case for branch compact view, each repo group is a single row, that will be hidden here if required
       } else if ($(row).hasClass("wi-status-class-branch-compact")) {
@@ -356,6 +368,8 @@ const wiView = {
       config.data.viewFilter[target].compact = $(`#wi-view-filter-${target}-compact`).is(':checked');
     if ($(`#wi-view-filter-${target}-exclude`).length > 0)
       config.data.viewFilter[target].exclude = $(`#wi-view-filter-${target}-exclude`).val().trim();
+    if ($(`#wi-view-filter-${target}-showPrRuns`).length > 0)
+      config.data.viewFilter[target].showPrRuns = $(`#wi-view-filter-${target}-showPrRuns`).is(":checked");
     config.save();
   },
 
@@ -573,6 +587,75 @@ const wiView = {
 
     // Apply exclude filter after rendering
     this.updateUiVisibility(`wi-items-${target}_${provider}_all`, target);
+  },
+
+  // Actions view rendering (custom path, does not go through renderWorkItems).
+  // The accordion wrapper is created by dispatchActions; this appends accordion-items.
+  renderActions: function (providerId, model) {
+    let target = "actions";
+    let header = model.header;
+    let items = model.items;
+    let provider = header.uid;
+
+    let html = `
+    <div class="accordion-item">
+      <h4 class="accordion-header">
+        <button id="wi-providers-panelbutton-${target}-${provider}"
+            wi-providers-panelbutton-provider="${provider}"
+            class="${this.statePanelButton(target, provider)}"
+            type="button" data-bs-toggle="collapse"
+            data-bs-target="#wi-providers-panel-${target}-${provider}"
+            aria-expanded="${this.statePanelAria(target, provider)}"
+            aria-controls="wi-providers-panel-${target}-${provider}">
+          <p class="m-0">
+            <span class='h4'>${wiRender.provider2html(header.provider)} ${header.provider} - ${wiRender.escHtml(header.user)}</span>
+          </p>
+        </button>
+      </h4>
+      <div id="wi-providers-panel-${target}-${provider}"
+          class="${this.statePanelBody(target, provider)}">
+        <div class="accordion-body">`;
+
+    if (items.length == 0) {
+      html += "<p>No workflow runs found. " + wiRender.escHtml(header.message) + "</p>";
+    } else {
+      html += "<table id='wi-items-actions_" + provider + "_all' class='table table-sm table-borderless m-0'><tbody>";
+      // Pre-count runs per workflow for header display
+      let wfCounts = {};
+      for (let item of items) {
+        let key = item.repo_name + ":" + item.actions.workflow_id;
+        wfCounts[key] = (wfCounts[key] || 0) + 1;
+      }
+      let currentRepo = "";
+      let currentWorkflow = "";
+      for (let item of items) {
+        if (item.repo_name !== currentRepo) {
+          currentRepo = item.repo_name;
+          currentWorkflow = "";
+          html += '<tr class="wi-status-class-header fs-5"><td colspan="4">'
+            + wiRender.repourl2html(item.repo_url, wiRender.escHtml(item.repo_name))
+            + '</td></tr>';
+        }
+        if (String(item.actions.workflow_id) !== currentWorkflow) {
+          currentWorkflow = String(item.actions.workflow_id);
+          let runCount = wfCounts[item.repo_name + ":" + item.actions.workflow_id] || 0;
+          html += wiRender.actionWorkflowHeader2html(item.actions.workflow_name, runCount, item.actions.workflow_id, item.repo_name);
+        }
+        html += wiRender.actionRun2html(item);
+      }
+      html += "</tbody></table>";
+    }
+    html += '</div></div></div>';
+    $("#" + target + " #wi-providers-panel").append(html);
+    this.updateUiVisibility("wi-items-actions_" + provider + "_all", target);
+    if (!this._actionsClickBound) {
+      $("#actions").on("click", ".wi-action-workflow-header", function () {
+        let wfId = $(this).attr("data-workflow");
+        let repoName = $(this).attr("data-repo");
+        $(this).closest("tbody").find('tr[data-workflow="' + CSS.escape(wfId) + '"][data-repo="' + CSS.escape(repoName) + '"]').not(".wi-action-workflow-header").toggle();
+      });
+      this._actionsClickBound = true;
+    }
   },
 
   //Memoria de los paneles acordeon de cada target+provider
