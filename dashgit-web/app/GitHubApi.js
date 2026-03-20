@@ -490,7 +490,7 @@ const gitHubApi = {
     let octokit = new Octokit({ userAgent: this.userAgent, auth: token });
     let results = {};
     this.log(provider.uid, "Getting actions data for " + repos.length + " repos");
-    let batchSize = 10;
+    const batchSize = 10;
     for (let i = 0; i < repos.length; i += batchSize) {
       let batch = repos.slice(i, i + batchSize);
       await Promise.allSettled(batch.map(async (repo) => {

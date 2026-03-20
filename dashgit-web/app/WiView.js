@@ -652,7 +652,7 @@ const wiView = {
       $("#actions").on("click", ".wi-action-workflow-header", function () {
         let wfId = $(this).attr("data-workflow");
         let repoName = $(this).attr("data-repo");
-        $(this).closest("tbody").find('tr[data-workflow="' + wfId + '"][data-repo="' + repoName + '"]').not(".wi-action-workflow-header").toggle();
+        $(this).closest("tbody").find('tr[data-workflow="' + CSS.escape(wfId) + '"][data-repo="' + CSS.escape(repoName) + '"]').not(".wi-action-workflow-header").toggle();
       });
       this._actionsClickBound = true;
     }
