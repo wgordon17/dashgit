@@ -135,6 +135,8 @@ const config = {
       this.setDefault(element.forks, "excludeRepos", []);
       this.setDefault(element.forks, "syncWorkflowFile", "upstream-sync.yml");
       this.setDefault(element.forks, "syncBranch", "upstream-sync");
+      this.setDefault(element, "actions", {});
+      this.setDefault(element.actions, "maxRunsPerWorkflow", 3);
     } else if (element.provider == "GitLab") {
       this.setDefault(element, "url", "");
       this.setDefault(element, "dependabotUser", "dependabot");
@@ -166,6 +168,9 @@ const config = {
     this.setDefault(data.viewFilter.dependabot, "exclude", "");
     this.setDefault(data.viewFilter, "forks", {});
     this.setDefault(data.viewFilter.forks, "exclude", "");
+    this.setDefault(data.viewFilter, "actions", {});
+    this.setDefault(data.viewFilter.actions, "showPrRuns", false);
+    this.setDefault(data.viewFilter.actions, "exclude", "");
   },
   setDefault: function (parent, property, value) {
     if (parent[property] == undefined || parent[property] == null)

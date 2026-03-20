@@ -68,6 +68,11 @@ const wiController = {
       this.dispatchForks();
       return;
     }
+    // Particular case for actions view
+    if (target == "actions") {
+      this.dispatchActions();
+      return;
+    }
     // General case for the rest of targets, create the promises to get the work items and then update the notifications and statuses asynchronously
     let promises = [];
     for (let prov of config.data.providers)
@@ -291,6 +296,41 @@ const wiController = {
       this.displayError("Failed to get forks data. Message: " + safeErr);
       const emptyModel = this.emptyModel(provider, "Error loading forks data");
       wiView.renderForks(provider.uid, emptyModel);
+    }
+  },
+
+  dispatchActions: async function () {
+    let html = '<div class="accordion" id="wi-providers-panel">';
+    html += wiHeaders.allProvidersHeader2html("actions");
+    html += '</div>';
+    $("#actions").html(html);
+    let promises = [];
+    for (let provider of config.data.providers)
+      if (provider.enabled && provider.provider === "GitHub")
+        promises.push(this.displayActions(provider));
+    await Promise.allSettled(promises);
+    wiView.updateStatusVisibility();
+    wiView.setLoading(false);
+  },
+
+  displayActions: async function (provider) {
+    try {
+      let rawData;
+      if (cache.actionsRawCache[provider.uid]) {
+        rawData = cache.actionsRawCache[provider.uid];
+      } else {
+        rawData = await gitHubApi.getActionsData(provider);
+        cache.actionsRawCache[provider.uid] = rawData;
+      }
+      let showPrRuns = config.data.viewFilter.actions?.showPrRuns ?? false;
+      let model = gitHubAdapter.actions2model(provider, rawData, showPrRuns);
+      wiView.renderActions(provider.uid, model);
+    } catch (error) {
+      console.error("Failed to get actions data:", error);
+      let safeErr = $("<span>").text(error.message || String(error)).html();
+      this.displayError("Failed to get actions data. Message: " + safeErr);
+      let emptyModel = this.emptyModel(provider, "Error loading actions data");
+      wiView.renderActions(provider.uid, emptyModel);
     }
   },
 

@@ -12,6 +12,8 @@ const wiHeaders = {
       header = this.followUpHeader2html();
     else if (target == "forks")
       header = this.forksHeader2html();
+    else if (target == "actions")
+      header = this.actionsHeader2html();
 
     // An additional view filter header to specify addtional filtering options as indicated in the config
     return this.viewFilterHeader2html(target, config.data.viewFilter[target]) + header;
@@ -113,6 +115,16 @@ const wiHeaders = {
       </p>
     </div>
     `;
+  },
+
+  actionsHeader2html: function () {
+    let showPrRuns = config.data.viewFilter.actions?.showPrRuns ?? false;
+    return '<div style="padding-left:8px">'
+      + '<p class="mb-3 mt-2">This view shows recent GitHub Actions workflow runs grouped by repository and workflow.</p>'
+      + '<div class="form-check form-check-inline">'
+      + '<input class="form-check-input wi-view-filter-clickable" type="checkbox" ' + (showPrRuns ? 'checked' : '') + ' value="" id="wi-view-filter-actions-showPrRuns">'
+      + '<label class="form-check-label" for="wi-view-filter-actions-showPrRuns">Show PR-triggered runs</label>'
+      + '</div></div>';
   },
 
   // Generic view header to perform additional filtering, these filters are specified in the config

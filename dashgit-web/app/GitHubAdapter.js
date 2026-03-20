@@ -275,6 +275,55 @@ const gitHubAdapter = {
     return m;
   },
 
+  actions2model: function(provider, actionsData, showPrRuns) {
+    let m = new Model().setHeader(provider.provider, provider.uid, provider.user, "");
+    for (let repoFullName of Object.keys(actionsData)) {
+      let runs = actionsData[repoFullName];
+      if (!showPrRuns)
+        runs = runs.filter(r => r.event !== "pull_request" && r.event !== "pull_request_target");
+      // Group by workflow_id
+      let groups = {};
+      for (let run of runs) {
+        if (!groups[run.workflow_id]) groups[run.workflow_id] = [];
+        groups[run.workflow_id].push(run);
+      }
+      let maxRuns = provider.actions?.maxRunsPerWorkflow ?? 3;
+      for (let workflowId of Object.keys(groups)) {
+        let groupRuns = groups[workflowId];
+        groupRuns.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        groupRuns = groupRuns.slice(0, maxRuns);
+        let workflowName = groupRuns[0]?.name ?? "Unknown";
+        for (let run of groupRuns) {
+          m.addItem({
+            repo_name: repoFullName,
+            type: "action",
+            iid: run.id,
+            title: run.display_title || run.name,
+            actions: {
+              workflow_name: workflowName,
+              workflow_id: run.workflow_id,
+              run_number: run.run_number,
+              status: run.status,
+              conclusion: run.conclusion,
+              event: run.event,
+              head_branch: run.head_branch,
+              run_started_at: run.run_started_at
+            },
+            author: run.actor?.login ?? "",
+            assignees: "",
+            created_at: run.created_at,
+            updated_at: run.updated_at,
+            iidstr: "#" + run.run_number,
+            url: run.html_url,
+            repo_url: "https://github.com/" + repoFullName,
+            labels: []
+          });
+        }
+      }
+    }
+    return m;
+  },
+
   determineSyncStatus: function (compare, syncPR) {
     if (compare.status === 'unknown') return 'unknown';
     if (syncPR) return 'pr-open';

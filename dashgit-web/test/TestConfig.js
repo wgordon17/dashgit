@@ -23,6 +23,7 @@ describe("TestConfig - Sanitizing config data", async function () {
                 statuses: {compact: false, exclude: ""},
                 dependabot: {exclude: ""},
                 forks: {exclude: ""},
+                actions: {exclude: "", showPrRuns: false},
             },
             appLastVersion: "",
             enableManagerRepo: false, managerRepoName: "", managerRepoToken: "",
@@ -44,6 +45,7 @@ describe("TestConfig - Sanitizing config data", async function () {
                 statuses: {compact: false, exclude: ""},
                 dependabot: {exclude: ""},
                 forks: {exclude: ""},
+                actions: {exclude: "", showPrRuns: false},
             },
             enableManagerRepo: false, managerRepoName: "", managerRepoToken: "",
             providers: [{
@@ -54,6 +56,7 @@ describe("TestConfig - Sanitizing config data", async function () {
                 filterIfLabel: '', unassignedAdditionalOwner: [], dependabotAdditionalOwner: [],
                 updates: { tokenSecret: "", userEmail: "" },
                 forks: { excludeRepos: [], syncWorkflowFile: "upstream-sync.yml", syncBranch: "upstream-sync" },
+                actions: { maxRunsPerWorkflow: 3 },
                 graphql: { "includeForks": false, "onlyForks": false, deprecatedGraphqlV1: false,
                     ownerAffiliations: ['OWNER'],
                     userSpecRepos: "", maxProjects: 20, maxBranches: 10, pageSize: 10
@@ -75,6 +78,7 @@ describe("TestConfig - Sanitizing config data", async function () {
                 statuses: {compact: false, exclude: ""},
                 dependabot: {exclude: ""},
                 forks: {exclude: ""},
+                actions: {exclude: "", showPrRuns: false},
             },
             enableManagerRepo: false, managerRepoName: "", managerRepoToken: "",
             providers: [{
@@ -85,6 +89,7 @@ describe("TestConfig - Sanitizing config data", async function () {
                 filterIfLabel: 'lbl', unassignedAdditionalOwner: [], dependabotAdditionalOwner: ["org1", "org2"],
                 updates: { tokenSecret: "DASHGIT_GITHUB_USER_TOKEN", userEmail: "" },
                 forks: { excludeRepos: [], syncWorkflowFile: "upstream-sync.yml", syncBranch: "upstream-sync" },
+                actions: { maxRunsPerWorkflow: 3 },
                 graphql: { "includeForks": false, "onlyForks": false, deprecatedGraphqlV1: false,
                     ownerAffiliations: ['OWNER', 'ORGANIZATION_MEMBER'],
                     userSpecRepos: "", maxProjects: 10, maxBranches: 20, pageSize: 10

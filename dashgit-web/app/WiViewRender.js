@@ -186,6 +186,68 @@ const wiRender = {
     return $("<span>").text(str).html();
   },
 
+  actionStatusClass: function (status, conclusion) {
+    if (status === "completed") {
+      if (conclusion === "success") return "success";
+      if (conclusion === "failure" || conclusion === "timed_out") return "failure";
+      return "notavailable";
+    }
+    if (status === "in_progress" || status === "queued" || status === "waiting" || status === "pending") return "pending";
+    return "notavailable";
+  },
+
+  actionStatusBadge: function (status, conclusion) {
+    if (status === "completed") {
+      if (conclusion === "success") return '<span class="badge bg-success">success</span>';
+      if (conclusion === "failure") return '<span class="badge bg-danger">failure</span>';
+      if (conclusion === "cancelled") return '<span class="badge bg-secondary">cancelled</span>';
+      if (conclusion === "skipped") return '<span class="badge bg-secondary">skipped</span>';
+      if (conclusion === "timed_out") return '<span class="badge bg-danger">timed out</span>';
+      return '<span class="badge bg-secondary">' + this.escHtml(conclusion || "unknown") + '</span>';
+    }
+    if (status === "in_progress") return '<span class="badge bg-warning text-dark"><span class="spinner-border spinner-border-sm" style="width:0.7em;height:0.7em"></span> running</span>';
+    if (status === "queued" || status === "waiting" || status === "pending") return '<span class="badge bg-warning text-dark">queued</span>';
+    return '<span class="badge bg-secondary">' + this.escHtml(status || "unknown") + '</span>';
+  },
+
+  formatDuration: function (startedAt, updatedAt, status) {
+    if (!startedAt) return "queued";
+    let start = new Date(startedAt);
+    let end = status !== "completed" ? new Date() : new Date(updatedAt);
+    let seconds = Math.floor((end - start) / 1000);
+    if (seconds < 60) return seconds + "s";
+    if (seconds < 3600) return Math.floor(seconds / 60) + "m " + (seconds % 60) + "s";
+    return Math.floor(seconds / 3600) + "h " + Math.floor((seconds % 3600) / 60) + "m";
+  },
+
+  actionWorkflowHeader2html: function (workflowName, runCount, workflowId, repoName) {
+    return '<tr class="wi-action-workflow-header" data-workflow="' + workflowId + '" data-repo="' + this.escHtml(repoName) + '" style="cursor:pointer">'
+      + '<td colspan="4" style="padding-left:20px">'
+      + '<i class="fa-solid fa-gear" style="color:DodgerBlue"></i> '
+      + '<strong>' + this.escHtml(workflowName) + '</strong> '
+      + '<span class="text-secondary">(' + runCount + ')</span> '
+      + '<i class="fa-solid fa-chevron-down" style="font-size:0.7em;color:#888"></i>'
+      + '</td></tr>';
+  },
+
+  actionRun2html: function (item) {
+    let actions = item.actions || {};
+    let statusClass = this.actionStatusClass(actions.status, actions.conclusion);
+    let badge = this.actionStatusBadge(actions.status, actions.conclusion);
+    let duration = this.formatDuration(actions.run_started_at, item.updated_at, actions.status);
+    let eventBadge = actions.event ? '<span class="badge bg-light text-dark border">' + this.escHtml(actions.event) + '</span>' : '';
+    let branchBadge = actions.head_branch ? '<span class="badge badge-light fw-bold" style="color:black; background-color:#DDF4FF;">' + this.escHtml(actions.head_branch) + '</span>' : '';
+    return '<tr class="wi-status-class-any wi-status-class-' + statusClass + '" itemrepo="' + this.escHtml(item.repo_name) + '" data-workflow="' + actions.workflow_id + '" data-repo="' + this.escHtml(item.repo_name) + '" style="padding-left:40px">'
+      + '<td style="width:24px;">' + badge + '</td>'
+      + '<td>'
+      + branchBadge + ' '
+      + '<a href="' + this.escHtml(item.url) + '" target="_blank" class="link-dark link-underline-opacity-0 link-underline-opacity-100-hover">' + this.escHtml(item.title) + '</a> '
+      + '<span class="text-secondary">' + this.escHtml(item.iidstr) + '</span> '
+      + eventBadge + ' '
+      + '<span class="text-secondary">' + this.escHtml(duration) + '</span>'
+      + '</td></tr>';
+  },
+
   forkRow2html: function (item) {
     const esc = this.escHtml;
     const actions = item.actions ?? {};
