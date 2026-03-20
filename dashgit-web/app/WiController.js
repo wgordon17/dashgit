@@ -46,6 +46,7 @@ import { config } from "./Config.js"
  */
 
 const wiController = {
+  _actionsEpoch: 0,
   reset: function (hard) {
     cache.reset(hard); //used for reload operations
   },
@@ -300,6 +301,7 @@ const wiController = {
   },
 
   dispatchActions: async function () {
+    let epoch = ++this._actionsEpoch;
     let html = '<div class="accordion" id="wi-providers-panel">';
     html += wiHeaders.allProvidersHeader2html("actions");
     html += '</div>';
@@ -307,13 +309,14 @@ const wiController = {
     let promises = [];
     for (let provider of config.data.providers)
       if (provider.enabled && provider.provider === "GitHub")
-        promises.push(this.displayActions(provider));
+        promises.push(this.displayActions(provider, epoch));
     await Promise.allSettled(promises);
+    if (epoch !== this._actionsEpoch) return;
     wiView.updateStatusVisibility();
     wiView.setLoading(false);
   },
 
-  displayActions: async function (provider) {
+  displayActions: async function (provider, epoch) {
     try {
       let rawData;
       if (cache.actionsRawCache[provider.uid]) {
@@ -322,6 +325,7 @@ const wiController = {
         rawData = await gitHubApi.getActionsData(provider);
         cache.actionsRawCache[provider.uid] = rawData;
       }
+      if (epoch !== this._actionsEpoch) return;
       let showPrRuns = config.data.viewFilter.actions?.showPrRuns ?? false;
       let model = gitHubAdapter.actions2model(provider, rawData, showPrRuns);
       wiView.renderActions(provider.uid, model);
